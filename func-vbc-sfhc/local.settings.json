@@ -1,0 +1,8 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "AzureWebJobsStorage": "DefaultEndpointsProtocol=https;AccountName=panoramichealth;AccountKey=xL+IloQjEA/Qi2OqOAZBg4YdxLLGMKKUVwfhn1PkPn/ETbFPKdAyzG0q2ArU/gKlbW4g5tuzbGik+AStmC2+JA==;EndpointSuffix=core.windows.net",
+    "AzureWebJobs.TimerTrigger1.Disabled": "true"
+  }
+}

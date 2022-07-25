@@ -1,0 +1,15 @@
+DW_Column,SQL_Column,Datatypes
+Alias,Alias,varchar(100)
+Id,Id,varchar(100)
+IsActive,IsActive,varchar(100)
+LastLoginDate,LastLoginDate,bigint
+UserRole_Name__c,UserRole_Name,varchar(100)
+Contact_Name__c,Contact_Name,varchar(100)
+Profile_Name__c,Profile_Name,varchar(100)
+LastModifiedDate,LastModifiedDate,bigint
+CreatedDate,CreatedDate,bigint
+FirstName,FirstName,varchar(100)
+LastName,LastName,varchar(100)
+Username,Username,varchar(100)
+Phone,Mobile,varchar(25)
+LastModifiedBy_Name__c,LastModifiedBy,varchar(100)

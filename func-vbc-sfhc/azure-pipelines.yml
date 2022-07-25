@@ -1,0 +1,225 @@
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    exclude:
+      - README.md # Do not run pipeline for README changes
+
+variables:
+# Common
+  - group: func-vbc-sfhc
+  - name: vmImageName
+    value: 'windows-latest'
+  - name: SQL_USER_NAME
+    value: $[variables.VBC_DB_USER_NAME]
+  - name: SQL_PASSWORD
+    value: $[variables.VBC_DB_PASSWORD]
+  - name: JDBC_URL
+    value: $[variables.VBC_DB_JDBC_URL]
+  - name: SF_USER_NAME
+    value: $[variables.SALESFORCE_USER_NAME]
+  - name: SF_PASSWORD
+    value: $[variables.SALESFORCE_PASSWORD]
+  - name: SF_SECURITY_TOKEN
+    value: $[variables.SALESFORCE_SECURITY_TOKEN]
+  - name: SES_SENDER
+    value: $[variables.AWS_SES_SENDER]
+  - name: SES_ACCESS_ID
+    value: $[variables.AWS_SES_ACCESS_ID]
+  - name: SES_ACCESS_KEY
+    value: $[variables.AWS_SES_ACCESS_KEY]
+  - name: SES_REGION
+    value: $[variables.AWS_SES_REGION]
+  - name: workingDirectory
+    value: '$(System.DefaultWorkingDirectory)/'
+# Dev
+  - name: SERVICE_CONNECTION_NAME_DEV
+    value: $[variables.SC_NAME_DEV]
+  - name: FA_NAME_DEV
+    value: $[variables.FUNCTION_APP_NAME_DEV]
+  - name: RG_NAME_DEV
+    value: $[variables.RESOURCE_GROUP_NAME_DEV]
+  - name: KV_NAME_DEV
+    value: $[variables.KEY_VAULT_NAME_DEV]
+  - name: ENVIRONMENT_DEV
+    value: $[variables.ENV_DEV]
+# QA
+  - name: SERVICE_CONNECTION_NAME_QA
+    value: $[variables.SC_NAME_QA]
+  - name: FA_NAME_QA
+    value: $[variables.FUNCTION_APP_NAME_QA]
+  - name: RG_NAME_QA
+    value: $[variables.RESOURCE_GROUP_NAME_QA]
+  - name: KV_NAME_QA
+    value: $[variables.KEY_VAULT_NAME_QA]
+  - name: ENVIRONMENT_QA
+    value: $[variables.ENV_QA]
+# Prod
+  - name: SERVICE_CONNECTION_NAME_PROD
+    value: $[variables.SC_NAME_PROD]
+  - name: ENVIRONMENT_PROD
+    value: $[variables.ENV_PROD]
+  - name: FA_NAME_PROD
+    value: $[variables.FUNCTION_APP_NAME_PROD]
+  - name: RG_NAME_PROD
+    value: $[variables.RESOURCE_GROUP_NAME_PROD]
+  - name: KV_NAME_PROD
+    value: $[variables.KEY_VAULT_NAME_PROD]
+  - name: ENVIRONMENT_PROD
+    value: $[variables.ENV_PROD]
+
+stages:
+- stage: Build
+  displayName: Build Stage
+  jobs:
+  - job: Build
+    displayName: Build
+    pool:
+      vmImage: $(vmImageName)
+
+    steps:
+    - task: UsePythonVersion@0
+      displayName: 'Use Python 3.9'
+      inputs:
+        versionSpec: 3.9
+
+    - bash: |
+        pip install --target="./.python_packages/lib/site-packages" -r ./requirements.txt
+      workingDirectory: $(workingDirectory)
+      displayName: 'Install application dependencies'
+
+    - task: ArchiveFiles@2
+      displayName: 'Archive files'
+      inputs:
+        rootFolderOrFile: '$(workingDirectory)'
+        includeRootFolder: false
+        archiveType: zip
+        archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+        replaceExistingArchive: true
+
+    - publish: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+      artifact: drop
+
+
+- stage: DeployToDev
+  displayName: Deploy to dev
+  dependsOn: Build
+  condition: succeeded()
+  jobs:
+    - deployment: Deploy
+      displayName: Deploy
+      environment: $(ENVIRONMENT_DEV)
+      pool:
+        vmImage: $(vmImageName)
+        name: ba-hub-self-hosted-windows
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            - task: AzureFunctionApp@1
+              displayName: "Deploy to azure function: $(FA_NAME_DEV)"
+              inputs:
+                azureSubscription: $(SERVICE_CONNECTION_NAME_DEV)
+                appType: functionAppLinux # default is functionApp
+                appName: $(FA_NAME_DEV)
+                package: "$(Pipeline.Workspace)/drop/$(Build.BuildId).zip"
+                appSettings:
+                  -sqluserName "@Microsoft.KeyVault(VaultName=$(KV_NAME_DEV);SecretName=$(SQL_USER_NAME))"
+                  -sqlpassword  "@Microsoft.KeyVault(VaultName=$(KV_NAME_DEV);SecretName=$(SQL_PASSWORD))"
+                  -salesforceusername "@Microsoft.KeyVault(VaultName=$(KV_NAME_DEV);SecretName=$(SF_USER_NAME))"
+                  -salesforcePassword "@Microsoft.KeyVault(VaultName=$(KV_NAME_DEV);SecretName=$(SF_PASSWORD))"
+                  -securityToken "@Microsoft.KeyVault(VaultName=$(KV_NAME_DEV);SecretName=$(SF_SECURITY_TOKEN))"
+                  -sqljarpath "codeArea\\lib\\mssql-jdbc-10.2.1.jre8.jar"
+                  -sqlurl "@Microsoft.KeyVault(VaultName=$(KV_NAME_DEV);SecretName=$(JDBC_URL))"
+                  -sender "@Microsoft.KeyVault(VaultName=$(KV_NAME_DEV);SecretName=$(SES_SENDER))"
+                  -accessid "@Microsoft.KeyVault(VaultName=$(KV_NAME_DEV);SecretName=$(SES_ACCESS_ID))"
+                  -accessKey "@Microsoft.KeyVault(VaultName=$(KV_NAME_DEV);SecretName=$(SES_ACCESS_KEY))"
+                  -awsregion "@Microsoft.KeyVault(VaultName=$(KV_NAME_DEV);SecretName=$(SES_REGION))"
+                  -FUNCTIONS_WORKER_RUNTIME python
+                #Uncomment the next lines to deploy to a deployment slot
+                #Note that deployment slots is not supported for Linux Dynamic SKU
+                #deployToSlotOrASE: true
+                resourceGroupName: $(RG_NAME_DEV)
+                #slotName: '<Slot name>'
+
+- stage: DeployToQA
+  displayName: Deploy to QA
+  dependsOn: DeployToDev
+  condition: succeeded()
+  jobs:
+    - deployment: Deploy
+      displayName: Deploy
+      environment: $(ENVIRONMENT_QA)
+      pool:
+        vmImage: $(vmImageName)
+        name: ba-hub-self-hosted-windows
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            - task: AzureFunctionApp@1
+              displayName: "Deploy to azure function: $(FA_NAME_QA)"
+              inputs:
+                azureSubscription: $(SERVICE_CONNECTION_NAME_QA)
+                appType: functionAppLinux # default is functionApp
+                appName: $(FA_NAME_QA)
+                package: "$(Pipeline.Workspace)/drop/$(Build.BuildId).zip"
+                appSettings:
+                # TODO: Other
+                  -sqluserName "@Microsoft.KeyVault(VaultName=$(KV_NAME_QA);SecretName=$(SQL_USER_NAME))"
+                  -sqlpassword  "@Microsoft.KeyVault(VaultName=$(KV_NAME_QA);SecretName=$(SQL_PASSWORD))"
+                  -salesforceusername "@Microsoft.KeyVault(VaultName=$(KV_NAME_QA);SecretName=$(SF_USER_NAME))"
+                  -salesforcePassword "@Microsoft.KeyVault(VaultName=$(KV_NAME_QA);SecretName=$(SF_PASSWORD))"
+                  -securityToken "@Microsoft.KeyVault(VaultName=$(KV_NAME_QA);SecretName=$(SF_SECURITY_TOKEN))"
+                  -sqljarpath "codeArea\\lib\\mssql-jdbc-10.2.1.jre8.jar"
+                  -sqlurl "@Microsoft.KeyVault(VaultName=$(KV_NAME_QA);SecretName=$(JDBC_URL))"
+                  -sender "@Microsoft.KeyVault(VaultName=$(KV_NAME_QA);SecretName=$(SES_SENDER))"
+                  -accessid "@Microsoft.KeyVault(VaultName=$(KV_NAME_QA);SecretName=$(SES_ACCESS_ID))"
+                  -accessKey "@Microsoft.KeyVault(VaultName=$(KV_NAME_QA);SecretName=$(SES_ACCESS_KEY))"
+                  -awsregion "@Microsoft.KeyVault(VaultName=$(KV_NAME_QA);SecretName=$(SES_AWS_REGION))"
+                #Uncomment the next lines to deploy to a deployment slot
+                #Note that deployment slots is not supported for Linux Dynamic SKU
+                #deployToSlotOrASE: true
+                resourceGroupName: $(RG_NAME_QA)
+                #slotName: '<Slot name>'
+
+- stage: DeployToProd
+  displayName: Deploy to Prod
+  dependsOn: DeployToQA
+  condition: succeeded()
+  jobs:
+    - deployment: Deploy
+      displayName: Deploy
+      environment: $(ENVIRONMENT_PROD)
+      pool:
+        vmImage: $(vmImageName)
+        name: ba-hub-self-hosted-windows
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            - task: AzureFunctionApp@1
+              displayName: "Deploy to azure function: $(FA_NAME_PROD)"
+              inputs:
+                azureSubscription: $(SERVICE_CONNECTION_NAME_PROD)
+                appType: functionAppLinux # default is functionApp
+                appName: $(FA_NAME_PROD)
+                package: "$(Pipeline.Workspace)/drop/$(Build.BuildId).zip"
+                appSettings:
+                  -sqluserName "@Microsoft.KeyVault(VaultName=$(KV_NAME_PROD);SecretName=$(SQL_USER_NAME))"
+                  -sqlpassword  "@Microsoft.KeyVault(VaultName=$(KV_NAME_PROD);SecretName=$(SQL_PASSWORD))"
+                  -salesforceusername "@Microsoft.KeyVault(VaultName=$(KV_NAME_PROD);SecretName=$(SF_USER_NAME))"
+                  -salesforcePassword "@Microsoft.KeyVault(VaultName=$(KV_NAME_PROD);SecretName=$(SF_PASSWORD))"
+                  -securityToken "@Microsoft.KeyVault(VaultName=$(KV_NAME_PROD);SecretName=$(SF_SECURITY_TOKEN))"
+                  -sqljarpath "codeArea\\lib\\mssql-jdbc-10.2.1.jre8.jar"
+                  -sqlurl "@Microsoft.KeyVault(VaultName=$(KV_NAME_PROD);SecretName=$(JDBC_URL))"
+                  -sender "@Microsoft.KeyVault(VaultName=$(KV_NAME_PROD);SecretName=$(SES_SENDER))"
+                  -accessid "@Microsoft.KeyVault(VaultName=$(KV_NAME_PROD);SecretName=$(SES_ACCESS_ID))"
+                  -accessKey "@Microsoft.KeyVault(VaultName=$(KV_NAME_PROD);SecretName=$(SES_ACCESS_KEY))"
+                  -awsregion "@Microsoft.KeyVault(VaultName=$(KV_NAME_PROD);SecretName=$(SES_AWS_REGION))"
+                #Uncomment the next lines to deploy to a deployment slot
+                #Note that deployment slots is not supported for Linux Dynamic SKU
+                #deployToSlotOrASE: true
+                resourceGroupName: $(RG_NAME_PROD)
+                #slotName: '<Slot name>'

@@ -1,0 +1,12 @@
+        userName = os.environ['sqluserName']  # Adeshpande
+        password = os.environ['sqlpassword']  # De$hp@nde121%
+        salesforceUsername = os.environ['salesforceusername']  # ashwini@cloudnerd.com.gnsfull
+        salesforcePassword = os.environ['salesforcepassword']  # Monica@0007777
+        securityToken = os.environ['securitytoken']  # QnEdmsnziG3bkerGB8NOrFfU
+        sourceTablename = os.environ['sourcetablename']  #VBC.[dbo].[vw_Salesforce_SFHC_VBC_Patients_Incremental_Upload]
+        targettablename = os.environ['targettablename']  # Account
+        sqljarpath = os.environ['sqljarpath']  # C:\\Users\\Ashwini\\PycharmProjects\\pythonProject\\sqljdbc4-3.0.jar
+        sqlurl = os.environ['sqlurl']  # jdbc:sqlserver://dataserver.sandbox.rcoanalytics.com:1433
+        logtable = os.environ['logtable']  # VBC.[VBC_Extern].VBC_SFHC_Log
+        sqlserverfailedtable = os.environ['sqlserverfailedtable']  # VBC.[VBC_Extern].VBC_SFHC_P2P_IncrementalUpload_FailureLog
+        sqlserversnapshottable= os.environ['sqlserversnapshottable'] # VBC.[VBC_Extern].VBC_SFHC_CurrentPatients
